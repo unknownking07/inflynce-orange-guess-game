@@ -1,5 +1,35 @@
 import { useState, useEffect, useRef } from 'react';
 
+// ---------- TYPE DEFINITIONS ---------- //
+interface FarcasterUser {
+  fid: number;
+  username?: string;
+  displayName?: string;
+  pfpUrl?: string;
+  verifiedAddresses?: {
+    eth_addresses?: string[];
+  };
+}
+
+interface FarcasterContext {
+  user?: FarcasterUser;
+}
+
+interface PlayerStats {
+  bestScore: number;
+  username: string;
+  maxLevel: number;
+  rank: number;
+}
+
+interface LeaderboardPlayer {
+  wallet: string;
+  username: string;
+  score: number;
+  level: number;
+  timestamp: number;
+}
+
 // ---------- ORANGE-THEMED WORDS ---------- //
 const ORANGE_WORDS = [
   'orange', 'oranges', 'orangecake', 'orangejuice', 'orangesoda', 'orangesorbet',
@@ -62,7 +92,7 @@ const CONTRACT_ABI = [
     "stateMutability": "view",
     "type": "function"
   }
-];
+] as const;
 
 export default function InflynceOrangeGuessGame() {
   // ---------- GAME STATE ---------- //
@@ -81,29 +111,22 @@ export default function InflynceOrangeGuessGame() {
   const [gameMessage, setGameMessage] = useState('Welcome to Inflynce Orange Guess Game! 🧡');
 
   // ---------- FARCASTER & BLOCKCHAIN STATE ---------- //
-  const [farcasterUser, setFarcasterUser] = useState(null);
+  const [farcasterUser, setFarcasterUser] = useState<FarcasterUser | null>(null);
   const [isSDKReady, setIsSDKReady] = useState(false);
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [playerStats, setPlayerStats] = useState(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardPlayer[]>([]);
+  const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
   const [isSubmittingScore, setIsSubmittingScore] = useState(false);
   const [blockchainStatus, setBlockchainStatus] = useState('');
 
-  const gameTimer = useRef(null);
+  const gameTimer = useRef<NodeJS.Timeout | null>(null);
 
   // ---------- INITIALIZE FARCASTER SDK ---------- //
-  useEffect(() => {
-    initializeFarcasterSDK();
-    return () => {
-      if (gameTimer.current) clearInterval(gameTimer.current);
-    };
-  }, []);
-
   const initializeFarcasterSDK = async () => {
     try {
       if (typeof window !== 'undefined') {
         const { sdk } = await import('@farcaster/miniapp-sdk');
         
-        const context = await sdk.context;
+        const context: FarcasterContext = await sdk.context;
         
         if (context?.user) {
           setFarcasterUser(context.user);
@@ -127,10 +150,21 @@ export default function InflynceOrangeGuessGame() {
     startNewGame();
   };
 
+  useEffect(() => {
+    initializeFarcasterSDK();
+    return () => {
+      if (gameTimer.current) clearInterval(gameTimer.current);
+    };
+  }, []);
+
   // ---------- GAME TIMER ---------- //
+  const handleTimeUp = () => {
+    handleWrongGuess();
+  };
+
   useEffect(() => {
     if (gameState.isGameOver || gameState.isPaused) {
-      clearInterval(gameTimer.current);
+      if (gameTimer.current) clearInterval(gameTimer.current);
       return;
     }
 
@@ -146,11 +180,13 @@ export default function InflynceOrangeGuessGame() {
       }));
     }, 1000);
 
-    return () => clearInterval(gameTimer.current);
+    return () => {
+      if (gameTimer.current) clearInterval(gameTimer.current);
+    };
   }, [gameState.timeLeft, gameState.isGameOver, gameState.isPaused]);
 
   // ---------- WORD HINT GENERATION ---------- //
-  const generateWordHint = (word, difficulty) => {
+  const generateWordHint = (word: string, difficulty: number): string => {
     const wordLength = word.length;
     const revealCount = Math.max(2, Math.ceil(wordLength - (difficulty * 0.5)));
     
@@ -181,7 +217,7 @@ export default function InflynceOrangeGuessGame() {
     generateNewWord(1);
   };
 
-  const generateNewWord = (level) => {
+  const generateNewWord = (level: number) => {
     const randomWord = ORANGE_WORDS[Math.floor(Math.random() * ORANGE_WORDS.length)];
     const hint = generateWordHint(randomWord, level);
     
@@ -239,11 +275,7 @@ export default function InflynceOrangeGuessGame() {
     }
   };
 
-  const handleTimeUp = () => {
-    handleWrongGuess();
-  };
-
-  const endGame = async (message) => {
+  const endGame = async (message: string) => {
     setGameState(prev => ({ ...prev, isGameOver: true }));
     setGameMessage(`${message} | Final Score: ${gameState.score} points (Level ${gameState.level})`);
     
@@ -262,12 +294,11 @@ export default function InflynceOrangeGuessGame() {
     try {
       const { sdk } = await import('@farcaster/miniapp-sdk');
       
-      // Use Farcaster wallet address
       const walletAddress = farcasterUser.verifiedAddresses?.eth_addresses?.[0] || 
                            `0x${farcasterUser.fid.toString().padStart(40, '0')}`;
       
-      const transactionId = await sdk.actions.sendTransaction({
-        chainId: 'eip155:8453', // Base Mainnet
+      await sdk.actions.sendTransaction({
+        chainId: 'eip155:8453',
         method: 'eth_sendTransaction',
         params: {
           abi: CONTRACT_ABI,
@@ -313,7 +344,7 @@ export default function InflynceOrangeGuessGame() {
         abi: CONTRACT_ABI,
         functionName: 'getTopN',
         args: [10]
-      });
+      }) as LeaderboardPlayer[];
       
       setLeaderboard(topPlayers || []);
     } catch (error) {
@@ -321,7 +352,7 @@ export default function InflynceOrangeGuessGame() {
     }
   };
 
-  const loadPlayerStats = async (user) => {
+  const loadPlayerStats = async (user: FarcasterUser) => {
     if (!isSDKReady || !user) return;
     
     try {
@@ -335,7 +366,7 @@ export default function InflynceOrangeGuessGame() {
         abi: CONTRACT_ABI,
         functionName: 'getPlayerStats',
         args: [walletAddress]
-      });
+      }) as [bigint, string, bigint, bigint];
       
       if (stats && stats[0] > 0) {
         setPlayerStats({
