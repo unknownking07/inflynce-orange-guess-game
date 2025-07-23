@@ -15,11 +15,11 @@ interface FarcasterContext {
   user?: FarcasterUser;
 }
 
-interface PlayerStats {
-  bestScore: number;
+interface LocalScore {
   username: string;
-  maxLevel: number;
-  rank: number;
+  score: number;
+  level: number;
+  timestamp: number;
 }
 
 // ---------- ORANGE-THEMED WORDS ---------- //
@@ -59,9 +59,14 @@ export default function InflynceOrangeGuessGame() {
   // ---------- FARCASTER STATE ---------- //
   const [farcasterUser, setFarcasterUser] = useState<FarcasterUser | null>(null);
   const [isSDKReady, setIsSDKReady] = useState(false);
-  const [localLeaderboard, setLocalLeaderboard] = useState<any[]>([]);
+  const [localLeaderboard, setLocalLeaderboard] = useState<LocalScore[]>([]);
 
   const gameTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // ---------- GAME TIMER ---------- //
+  const handleTimeUp = () => {
+    handleWrongGuess();
+  };
 
   // ---------- INITIALIZE FARCASTER SDK ---------- //
   const initializeFarcasterSDK = async () => {
@@ -93,12 +98,7 @@ export default function InflynceOrangeGuessGame() {
     return () => {
       if (gameTimer.current) clearInterval(gameTimer.current);
     };
-  }, []);
-
-  // ---------- GAME TIMER ---------- //
-  const handleTimeUp = () => {
-    handleWrongGuess();
-  };
+  }, [initializeFarcasterSDK]);
 
   useEffect(() => {
     if (gameState.isGameOver || gameState.isPaused) {
@@ -121,7 +121,7 @@ export default function InflynceOrangeGuessGame() {
     return () => {
       if (gameTimer.current) clearInterval(gameTimer.current);
     };
-  }, [gameState.timeLeft, gameState.isGameOver, gameState.isPaused]);
+  }, [gameState.timeLeft, gameState.isGameOver, gameState.isPaused, handleTimeUp]);
 
   // ---------- WORD HINT GENERATION ---------- //
   const generateWordHint = (word: string, difficulty: number): string => {
@@ -226,19 +226,19 @@ export default function InflynceOrangeGuessGame() {
   // ---------- LOCAL STORAGE FOR DEMO ---------- //
   const saveScoreLocally = () => {
     try {
-      const newEntry = {
+      const newEntry: LocalScore = {
         username: farcasterUser?.username || 'Anonymous',
         score: gameState.score,
         level: gameState.level,
         timestamp: Date.now()
       };
       
-      const existingScores = JSON.parse(localStorage.getItem('orangeGameScores') || '[]');
+      const existingScores = JSON.parse(localStorage.getItem('orangeGameScores') || '[]') as LocalScore[];
       existingScores.push(newEntry);
       
       // Keep only top 10 scores
       const topScores = existingScores
-        .sort((a: any, b: any) => b.score - a.score)
+        .sort((a: LocalScore, b: LocalScore) => b.score - a.score)
         .slice(0, 10);
       
       localStorage.setItem('orangeGameScores', JSON.stringify(topScores));
@@ -250,7 +250,7 @@ export default function InflynceOrangeGuessGame() {
 
   const loadLocalScores = () => {
     try {
-      const scores = JSON.parse(localStorage.getItem('orangeGameScores') || '[]');
+      const scores = JSON.parse(localStorage.getItem('orangeGameScores') || '[]') as LocalScore[];
       setLocalLeaderboard(scores);
     } catch (error) {
       console.error('Failed to load local scores:', error);
