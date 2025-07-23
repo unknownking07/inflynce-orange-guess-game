@@ -22,14 +22,6 @@ interface PlayerStats {
   rank: number;
 }
 
-interface LeaderboardPlayer {
-  wallet: string;
-  username: string;
-  score: number;
-  level: number;
-  timestamp: number;
-}
-
 // ---------- ORANGE-THEMED WORDS ---------- //
 const ORANGE_WORDS = [
   'orange', 'oranges', 'orangecake', 'orangejuice', 'orangesoda', 'orangesorbet',
@@ -45,54 +37,8 @@ const MAX_TRIES = 3;
 const TIMER_SECONDS = 20;
 const POINTS_PER_LEVEL = 10;
 
-// ---------- YOUR DEPLOYED CONTRACT ON BASE MAINNET ---------- //
+// ---------- CONTRACT INFO (FOR DISPLAY ONLY) ---------- //
 const CONTRACT_ADDRESS = '0xA52357561265e6Ca8dE400139329D58347106087';
-
-const CONTRACT_ABI = [
-  {
-    "inputs": [
-      {"name": "playerWallet", "type": "address"},
-      {"name": "username", "type": "string"},
-      {"name": "score", "type": "uint256"},
-      {"name": "level", "type": "uint256"}
-    ],
-    "name": "submitScore",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{"name": "n", "type": "uint256"}],
-    "name": "getTopN",
-    "outputs": [
-      {
-        "components": [
-          {"name": "wallet", "type": "address"},
-          {"name": "username", "type": "string"},
-          {"name": "score", "type": "uint256"},
-          {"name": "level", "type": "uint256"},
-          {"name": "timestamp", "type": "uint256"}
-        ],
-        "name": "",
-        "type": "tuple[]"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{"name": "player", "type": "address"}],
-    "name": "getPlayerStats",
-    "outputs": [
-      {"name": "bestScore", "type": "uint256"},
-      {"name": "username", "type": "string"},
-      {"name": "maxLevel", "type": "uint256"},
-      {"name": "rank", "type": "uint256"}
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  }
-] as const;
 
 export default function InflynceOrangeGuessGame() {
   // ---------- GAME STATE ---------- //
@@ -110,13 +56,10 @@ export default function InflynceOrangeGuessGame() {
   const [userGuess, setUserGuess] = useState('');
   const [gameMessage, setGameMessage] = useState('Welcome to Inflynce Orange Guess Game! 🧡');
 
-  // ---------- FARCASTER & BLOCKCHAIN STATE ---------- //
+  // ---------- FARCASTER STATE ---------- //
   const [farcasterUser, setFarcasterUser] = useState<FarcasterUser | null>(null);
   const [isSDKReady, setIsSDKReady] = useState(false);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardPlayer[]>([]);
-  const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
-  const [isSubmittingScore, setIsSubmittingScore] = useState(false);
-  const [blockchainStatus, setBlockchainStatus] = useState('');
+  const [localLeaderboard, setLocalLeaderboard] = useState<any[]>([]);
 
   const gameTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -133,11 +76,6 @@ export default function InflynceOrangeGuessGame() {
           setIsSDKReady(true);
           await sdk.actions.ready();
           setGameMessage(`🎉 Welcome @${context.user.username}! Let's play!`);
-          
-          await Promise.all([
-            loadPlayerStats(context.user),
-            loadLeaderboard()
-          ]);
         } else {
           setGameMessage('⚠️ Please open this game inside Farcaster for full features');
         }
@@ -279,112 +217,53 @@ export default function InflynceOrangeGuessGame() {
     setGameState(prev => ({ ...prev, isGameOver: true }));
     setGameMessage(`${message} | Final Score: ${gameState.score} points (Level ${gameState.level})`);
     
-    if (isSDKReady && farcasterUser && gameState.score > 0) {
-      await submitScoreToBlockchain();
+    // Save score locally for demo
+    if (farcasterUser && gameState.score > 0) {
+      saveScoreLocally();
     }
   };
 
-  // ---------- BLOCKCHAIN FUNCTIONS ---------- //
-  const submitScoreToBlockchain = async () => {
-    if (!isSDKReady || !farcasterUser || gameState.score === 0) return;
-    
-    setIsSubmittingScore(true);
-    setBlockchainStatus('🔗 Submitting score to Base blockchain...');
-    
+  // ---------- LOCAL STORAGE FOR DEMO ---------- //
+  const saveScoreLocally = () => {
     try {
-      const { sdk } = await import('@farcaster/miniapp-sdk');
+      const newEntry = {
+        username: farcasterUser?.username || 'Anonymous',
+        score: gameState.score,
+        level: gameState.level,
+        timestamp: Date.now()
+      };
       
-      const walletAddress = farcasterUser.verifiedAddresses?.eth_addresses?.[0] || 
-                           `0x${farcasterUser.fid.toString().padStart(40, '0')}`;
+      const existingScores = JSON.parse(localStorage.getItem('orangeGameScores') || '[]');
+      existingScores.push(newEntry);
       
-      await sdk.actions.sendTransaction({
-        chainId: 'eip155:8453',
-        method: 'eth_sendTransaction',
-        params: {
-          abi: CONTRACT_ABI,
-          to: CONTRACT_ADDRESS,
-          data: {
-            functionName: 'submitScore',
-            args: [
-              walletAddress,
-              farcasterUser.username || 'Anonymous',
-              gameState.score,
-              gameState.level
-            ]
-          }
-        }
-      });
+      // Keep only top 10 scores
+      const topScores = existingScores
+        .sort((a: any, b: any) => b.score - a.score)
+        .slice(0, 10);
       
-      setBlockchainStatus('✅ Score saved to Base blockchain successfully!');
-      
-      setTimeout(async () => {
-        await Promise.all([
-          loadLeaderboard(),
-          loadPlayerStats(farcasterUser)
-        ]);
-      }, 3000);
-      
+      localStorage.setItem('orangeGameScores', JSON.stringify(topScores));
+      setLocalLeaderboard(topScores);
     } catch (error) {
-      console.error('Blockchain submission error:', error);
-      setBlockchainStatus('❌ Failed to save score to blockchain');
-    }
-    
-    setIsSubmittingScore(false);
-  };
-
-  const loadLeaderboard = async () => {
-    if (!isSDKReady) return;
-    
-    try {
-      const { sdk } = await import('@farcaster/miniapp-sdk');
-      
-      const topPlayers = await sdk.actions.readContract({
-        chainId: 'eip155:8453',
-        address: CONTRACT_ADDRESS,
-        abi: CONTRACT_ABI,
-        functionName: 'getTopN',
-        args: [10]
-      }) as LeaderboardPlayer[];
-      
-      setLeaderboard(topPlayers || []);
-    } catch (error) {
-      console.error('Failed to load leaderboard:', error);
+      console.error('Failed to save score locally:', error);
     }
   };
 
-  const loadPlayerStats = async (user: FarcasterUser) => {
-    if (!isSDKReady || !user) return;
-    
+  const loadLocalScores = () => {
     try {
-      const { sdk } = await import('@farcaster/miniapp-sdk');
-      const walletAddress = user.verifiedAddresses?.eth_addresses?.[0] || 
-                           `0x${user.fid.toString().padStart(40, '0')}`;
-      
-      const stats = await sdk.actions.readContract({
-        chainId: 'eip155:8453',
-        address: CONTRACT_ADDRESS,
-        abi: CONTRACT_ABI,
-        functionName: 'getPlayerStats',
-        args: [walletAddress]
-      }) as [bigint, string, bigint, bigint];
-      
-      if (stats && stats[0] > 0) {
-        setPlayerStats({
-          bestScore: Number(stats[0]),
-          username: stats[1],
-          maxLevel: Number(stats[2]),
-          rank: Number(stats[3])
-        });
-      }
+      const scores = JSON.parse(localStorage.getItem('orangeGameScores') || '[]');
+      setLocalLeaderboard(scores);
     } catch (error) {
-      console.error('Failed to load player stats:', error);
+      console.error('Failed to load local scores:', error);
     }
   };
+
+  useEffect(() => {
+    loadLocalScores();
+  }, []);
 
   // ---------- SOCIAL SHARING ---------- //
   const shareScore = async () => {
-    const rankText = playerStats?.rank > 0 ? ` (Rank #${playerStats.rank})` : '';
-    const shareText = `🧡 Just scored ${gameState.score} points on Level ${gameState.level} in Inflynce Orange Guess Game${rankText}! 🍊
+    const shareText = `🧡 Just scored ${gameState.score} points on Level ${gameState.level} in Inflynce Orange Guess Game! 🍊
 
 Can you beat my score? Play now!`;
     
@@ -442,11 +321,6 @@ Can you beat my score? Play now!`;
             marginBottom: '10px'
           }}>
             👋 Welcome @{farcasterUser.username}!
-            {playerStats?.rank > 0 && (
-              <span style={{ marginLeft: '10px', fontWeight: 'bold' }}>
-                🏆 Rank #{playerStats.rank}
-              </span>
-            )}
           </div>
         )}
       </div>
@@ -587,20 +461,19 @@ Can you beat my score? Play now!`;
           </button>
           <button
             onClick={shareScore}
-            disabled={isSubmittingScore}
             style={{
               padding: '15px 30px',
               fontSize: '1.3rem',
               borderRadius: '25px',
               border: 'none',
-              backgroundColor: isSubmittingScore ? '#6C757D' : '#007BFF',
+              backgroundColor: '#007BFF',
               color: 'white',
               fontWeight: 'bold',
-              cursor: isSubmittingScore ? 'not-allowed' : 'pointer',
+              cursor: 'pointer',
               boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
             }}
           >
-            {isSubmittingScore ? '⏳ Saving...' : '📱 Share Score'}
+            📱 Share Score
           </button>
         </div>
       )}
@@ -620,20 +493,6 @@ Can you beat my score? Play now!`;
         </div>
       )}
 
-      {/* BLOCKCHAIN STATUS */}
-      {blockchainStatus && (
-        <div style={{
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          padding: '12px 20px',
-          borderRadius: '10px',
-          textAlign: 'center',
-          fontSize: '1rem',
-          marginBottom: '20px'
-        }}>
-          {blockchainStatus}
-        </div>
-      )}
-
       {/* CONTRACT INFO */}
       <div style={{
         backgroundColor: 'rgba(0,0,0,0.2)',
@@ -643,11 +502,13 @@ Can you beat my score? Play now!`;
         textAlign: 'center',
         fontSize: '0.9rem'
       }}>
-        🔗 Contract: <code>{CONTRACT_ADDRESS}</code> on Base Mainnet
+        🔗 Ready for Base Mainnet: <code>{CONTRACT_ADDRESS}</code>
+        <br />
+        <small>⚠️ Blockchain features temporarily disabled for deployment</small>
       </div>
 
-      {/* LEADERBOARD */}
-      {leaderboard.length > 0 && (
+      {/* LOCAL LEADERBOARD */}
+      {localLeaderboard.length > 0 && (
         <div style={{
           backgroundColor: 'rgba(0,0,0,0.4)',
           borderRadius: '20px',
@@ -660,11 +521,11 @@ Can you beat my score? Play now!`;
             fontSize: '1.8rem',
             fontWeight: 'bold'
           }}>
-            🏆 Base Mainnet Leaderboard
+            🏆 Local Leaderboard (Demo)
           </h2>
           
-          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-            {leaderboard.slice(0, 10).map((player, index) => (
+          <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+            {localLeaderboard.slice(0, 10).map((player, index) => (
               <div
                 key={index}
                 style={{
@@ -691,7 +552,7 @@ Can you beat my score? Play now!`;
                       @{player.username}
                     </div>
                     <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>
-                      Level {Number(player.level)}
+                      Level {player.level}
                     </div>
                   </div>
                 </div>
@@ -700,64 +561,10 @@ Can you beat my score? Play now!`;
                   fontWeight: 'bold',
                   color: '#FFD23F'
                 }}>
-                  {Number(player.score)} pts
+                  {player.score} pts
                 </div>
               </div>
             ))}
-          </div>
-          
-          <button
-            onClick={loadLeaderboard}
-            style={{
-              width: '100%',
-              padding: '12px',
-              marginTop: '15px',
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '10px',
-              cursor: 'pointer',
-              fontSize: '1rem'
-            }}
-          >
-            🔄 Refresh Leaderboard
-          </button>
-        </div>
-      )}
-
-      {/* PLAYER STATS */}
-      {playerStats && (
-        <div style={{
-          backgroundColor: 'rgba(0,0,0,0.3)',
-          borderRadius: '15px',
-          padding: '20px',
-          marginTop: '20px',
-          textAlign: 'center'
-        }}>
-          <h3 style={{ marginBottom: '15px' }}>📊 Your Stats</h3>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-            gap: '15px'
-          }}>
-            <div>
-              <div style={{ opacity: 0.8 }}>Best Score</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#FFD23F' }}>
-                {playerStats.bestScore}
-              </div>
-            </div>
-            <div>
-              <div style={{ opacity: 0.8 }}>Max Level</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
-                {playerStats.maxLevel}
-              </div>
-            </div>
-            <div>
-              <div style={{ opacity: 0.8 }}>Rank</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#FF6B35' }}>
-                #{playerStats.rank}
-              </div>
-            </div>
           </div>
         </div>
       )}
