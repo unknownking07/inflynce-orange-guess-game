@@ -293,24 +293,36 @@ export default function InflynceOrangeGuessGame() {
     loadLocalScores();
   }, []);
 
-  // ---------- SOCIAL SHARING ---------- //
+  // ---------- SOCIAL SHARING (TYPESCRIPT-SAFE) ---------- //
   const shareScore = async () => {
     const shareText = `🧡 Just scored ${gameState.score} points on Level ${gameState.level} in Inflynce Orange Guess Game! 🍊
 
 Can you beat my score? Play now!`;
+    
     try {
       if (isSDKReady) {
         const { sdk } = await import('@farcaster/miniapp-sdk');
         await sdk.actions.openUrl(
           `https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}`
         );
-      } else if (typeof navigator !== 'undefined' && (navigator as any).share) {
-        await (navigator as any).share({
-          title: 'Inflynce Orange Guess Game',
-          text: shareText,
-          url: window.location.href
-        });
-      } else {
+      } else if (typeof navigator !== 'undefined' && 'share' in navigator) {
+        // TypeScript-safe navigator.share check and usage
+        const nav = navigator as Navigator & {
+          share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
+        };
+        
+        if (nav.share) {
+          await nav.share({
+            title: 'Inflynce Orange Guess Game',
+            text: shareText,
+            url: window.location.href
+          });
+        } else {
+          // Fallback to clipboard
+          await navigator.clipboard.writeText(shareText);
+          alert('📋 Score copied to clipboard!');
+        }
+      } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(shareText);
         alert('📋 Score copied to clipboard!');
       }

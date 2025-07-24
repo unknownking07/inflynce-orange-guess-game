@@ -5,7 +5,7 @@ export default function Document() {
     <Html lang="en">
       <Head>
         {/* General Meta */}
-        <title>Inflynce Orange Guess Game 🧡</title>
+        {/* (Remove the <title> line here) */}
         <meta name="description" content="A fun word-guessing game with 33+ orange-themed words, progressive difficulty, and a Base Mainnet leaderboard. Compete with players worldwide!" />
         <meta name="keywords" content="farcaster, mini app, word game, blockchain, base mainnet, orange" />
         <meta name="author" content="Inflynce" />
@@ -22,25 +22,4 @@ export default function Document() {
 
         {/* Twitter Card */}
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Inflynce Orange Guess Game 🧡" />
-        <meta name="twitter:description" content="Guess orange-themed words and compete on Base Mainnet leaderboard!" />
-        <meta name="twitter:image" content="https://inflynce-orange-guess-game.vercel.app/og-image.png" />
-
-        {/* Farcaster Frame / Mini App Embed (for vNext frames or mini app previews) */}
-        <meta property="fc:frame" content="vNext" />
-        <meta property="fc:frame:image" content="https://inflynce-orange-guess-game.vercel.app/frame-image.png" />
-        <meta property="fc:frame:button:1" content="🎮 Play Game" />
-        <meta property="fc:frame:button:1:action" content="link" />
-        <meta property="fc:frame:button:1:target" content="https://inflynce-orange-guess-game.vercel.app/" />
-
-        {/* Icons */}
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-      </Head>
-      <body>
-        <Main />
-        <NextScript />
-      </body>
-    </Html>
-  );
-}
+        <
