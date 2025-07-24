@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 
 // ---------- TYPE DEFINITIONS ---------- //
 interface FarcasterUser {
@@ -63,6 +63,60 @@ export default function InflynceOrangeGuessGame() {
 
   const gameTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // ---------- MEMOIZED COMPONENTS TO PREVENT FLICKERING ---------- //
+  const memoizedWordHint = useMemo(() => {
+    if (!wordHint) return null;
+    
+    return wordHint.split('').map((char, index) => (
+      <span
+        key={`${currentWord}-${index}-${char}`}
+        style={{
+          color: char === '_' ? '#FFB3B3' : '#FF6B35',
+          textShadow: '2px 2px 4px rgba(0,0,0,0.5)'
+        }}
+      >
+        {char}
+      </span>
+    ));
+  }, [wordHint, currentWord]);
+
+  const memoizedGameStats = useMemo(() => (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+      gap: '15px',
+      marginBottom: '20px'
+    }}>
+      <div>
+        <div style={{ fontSize: '1.1rem', opacity: 0.8 }}>Level</div>
+        <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{gameState.level}</div>
+      </div>
+      <div>
+        <div style={{ fontSize: '1.1rem', opacity: 0.8 }}>Score</div>
+        <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#FFD23F' }}>
+          {gameState.score}
+        </div>
+      </div>
+      <div>
+        <div style={{ fontSize: '1.1rem', opacity: 0.8 }}>Lives</div>
+        <div style={{ fontSize: '2rem' }}>
+          {'❤️'.repeat(gameState.tries)}{'🖤'.repeat(MAX_TRIES - gameState.tries)}
+        </div>
+      </div>
+      <div>
+        <div style={{ fontSize: '1.1rem', opacity: 0.8 }}>Time</div>
+        <div style={{
+          fontSize: '2rem',
+          fontWeight: 'bold',
+          color: gameState.timeLeft <= 5 ? '#FF4444' : 'white',
+          transition: 'color 0.3s ease'
+        }}>
+          {gameState.timeLeft}s
+        </div>
+      </div>
+    </div>
+  ), [gameState.level, gameState.score, gameState.tries, gameState.timeLeft]);
+
   // ---------- GAME TIMER ---------- //
   const handleTimeUp = () => {
     handleWrongGuess();
@@ -98,7 +152,7 @@ export default function InflynceOrangeGuessGame() {
     return () => {
       if (gameTimer.current) clearInterval(gameTimer.current);
     };
-  }, [initializeFarcasterSDK]);
+  }, []);
 
   useEffect(() => {
     if (gameState.isGameOver || gameState.isPaused) {
@@ -121,7 +175,7 @@ export default function InflynceOrangeGuessGame() {
     return () => {
       if (gameTimer.current) clearInterval(gameTimer.current);
     };
-  }, [gameState.timeLeft, gameState.isGameOver, gameState.isPaused, handleTimeUp]);
+  }, [gameState.timeLeft, gameState.isGameOver, gameState.isPaused]);
 
   // ---------- WORD HINT GENERATION ---------- //
   const generateWordHint = (word: string, difficulty: number): string => {
@@ -334,41 +388,9 @@ Can you beat my score? Play now!`;
         textAlign: 'center',
         backdropFilter: 'blur(10px)'
       }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-          gap: '15px',
-          marginBottom: '20px'
-        }}>
-          <div>
-            <div style={{ fontSize: '1.1rem', opacity: 0.8 }}>Level</div>
-            <div style={{ fontSize: '2rem', fontWeight: 'bold' }}>{gameState.level}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: '1.1rem', opacity: 0.8 }}>Score</div>
-            <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#FFD23F' }}>
-              {gameState.score}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: '1.1rem', opacity: 0.8 }}>Lives</div>
-            <div style={{ fontSize: '2rem' }}>
-              {'❤️'.repeat(gameState.tries)}{'🖤'.repeat(MAX_TRIES - gameState.tries)}
-            </div>
-          </div>
-          <div>
-            <div style={{ fontSize: '1.1rem', opacity: 0.8 }}>Time</div>
-            <div style={{
-              fontSize: '2rem',
-              fontWeight: 'bold',
-              color: gameState.timeLeft <= 5 ? '#FF4444' : 'white'
-            }}>
-              {gameState.timeLeft}s
-            </div>
-          </div>
-        </div>
+        {memoizedGameStats}
 
-        {/* WORD HINT */}
+        {/* WORD HINT - NO MORE FLICKERING */}
         <div style={{
           fontSize: '2.5rem',
           fontWeight: 'bold',
@@ -377,19 +399,10 @@ Can you beat my score? Play now!`;
           margin: '20px 0',
           padding: '15px',
           backgroundColor: 'rgba(255,255,255,0.1)',
-          borderRadius: '10px'
+          borderRadius: '10px',
+          transition: 'all 0.2s ease'
         }}>
-          {wordHint.split('').map((char, index) => (
-            <span
-              key={index}
-              style={{
-                color: char === '_' ? '#FFB3B3' : '#FF6B35',
-                textShadow: '2px 2px 4px rgba(0,0,0,0.5)'
-              }}
-            >
-              {char}
-            </span>
-          ))}
+          {memoizedWordHint}
         </div>
       </div>
 
@@ -454,7 +467,8 @@ Can you beat my score? Play now!`;
               fontWeight: 'bold',
               marginRight: '15px',
               cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+              transition: 'all 0.3s ease'
             }}
           >
             🔄 Play Again
@@ -470,7 +484,8 @@ Can you beat my score? Play now!`;
               color: 'white',
               fontWeight: 'bold',
               cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+              transition: 'all 0.3s ease'
             }}
           >
             📱 Share Score
@@ -487,7 +502,8 @@ Can you beat my score? Play now!`;
           textAlign: 'center',
           fontSize: '1.1rem',
           fontWeight: '500',
-          marginBottom: '25px'
+          marginBottom: '25px',
+          transition: 'all 0.3s ease'
         }}>
           {gameMessage}
         </div>
@@ -536,7 +552,8 @@ Can you beat my score? Play now!`;
                   backgroundColor: index === 0 ? 'rgba(255,215,0,0.2)' : 'rgba(255,255,255,0.1)',
                   borderRadius: '12px',
                   marginBottom: '10px',
-                  border: index === 0 ? '2px solid gold' : 'none'
+                  border: index === 0 ? '2px solid gold' : 'none',
+                  transition: 'all 0.2s ease'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
