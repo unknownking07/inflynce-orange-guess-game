@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Head from 'next/head';
 
 // ---------- TYPE DEFINITIONS ---------- //
@@ -64,6 +64,75 @@ export default function InflynceOrangeGuessGame() {
 
   const gameTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // ---------- WORD HINT GENERATION ---------- //
+  const generateWordHint = useCallback((word: string, difficulty: number): string => {
+    const wordLength = word.length;
+    const revealCount = Math.max(2, Math.ceil(wordLength - (difficulty * 0.5)));
+    const revealIndices = new Set([0, wordLength - 1]);
+    
+    while (revealIndices.size < Math.min(revealCount, wordLength)) {
+      const randomIndex = Math.floor(Math.random() * wordLength);
+      revealIndices.add(randomIndex);
+    }
+    
+    return word
+      .toUpperCase()
+      .split('')
+      .map((char, index) => revealIndices.has(index) ? char : '_')
+      .join('-');
+  }, []);
+
+  // ---------- GAME LOGIC ---------- //
+  const generateNewWord = useCallback((level: number) => {
+    const randomWord = ORANGE_WORDS[Math.floor(Math.random() * ORANGE_WORDS.length)];
+    const hint = generateWordHint(randomWord, level);
+    
+    setCurrentWord(randomWord);
+    setWordHint(hint);
+    setUserGuess('');
+    setGameState(prev => ({
+      ...prev,
+      timeLeft: TIMER_SECONDS
+    }));
+  }, [generateWordHint]);
+
+  const startNewGame = useCallback(() => {
+    setGameState({
+      level: 1,
+      score: 0,
+      tries: MAX_TRIES,
+      timeLeft: TIMER_SECONDS,
+      isGameOver: false,
+      isPaused: false
+    });
+    generateNewWord(1);
+  }, [generateNewWord]);
+
+  const handleWrongGuess = useCallback(() => {
+    const newTries = gameState.tries - 1;
+    
+    if (newTries > 0) {
+      setGameState(prev => ({
+        ...prev,
+        tries: newTries,
+        timeLeft: TIMER_SECONDS
+      }));
+      setGameMessage(`❌ Wrong! "${userGuess}" is not correct. ${newTries} tries left.`);
+    } else {
+      setGameState(prev => ({ ...prev, isGameOver: true }));
+      setGameMessage(`💀 Game Over! The word was "${currentWord.toUpperCase()}" | Final Score: ${gameState.score} points (Level ${gameState.level})`);
+      
+      // Save score locally for demo
+      if (farcasterUser && gameState.score > 0) {
+        saveScoreLocally();
+      }
+    }
+  }, [gameState.tries, gameState.score, gameState.level, userGuess, currentWord, farcasterUser]);
+
+  const handleTimeUp = useCallback(() => {
+    handleWrongGuess();
+  }, [handleWrongGuess]);
+
   // ---------- MEMOIZED COMPONENTS (NO FLICKERING) ---------- //
   const memoizedWordHint = useMemo(() => {
     if (!wordHint) return null;
@@ -117,17 +186,13 @@ export default function InflynceOrangeGuessGame() {
     </div>
   ), [gameState.level, gameState.score, gameState.tries, gameState.timeLeft]);
 
-  // ---------- GAME TIMER ---------- //
-  const handleTimeUp = () => {
-    handleWrongGuess();
-  };
-
   // ---------- INITIALIZE FARCASTER SDK ---------- //
-  const initializeFarcasterSDK = async () => {
+  const initializeFarcasterSDK = useCallback(async () => {
     try {
       if (typeof window !== 'undefined') {
         const { sdk } = await import('@farcaster/miniapp-sdk');
         const context: FarcasterContext = await sdk.context;
+        
         if (context?.user) {
           setFarcasterUser(context.user);
           setIsSDKReady(true);
@@ -141,122 +206,68 @@ export default function InflynceOrangeGuessGame() {
       console.error('Farcaster SDK initialization failed:', error);
       setGameMessage('🎮 Playing in demo mode - some features limited');
     }
+    
     startNewGame();
-  };
+  }, [startNewGame]);
 
   useEffect(() => {
     initializeFarcasterSDK();
     return () => {
       if (gameTimer.current) clearInterval(gameTimer.current);
     };
-  }, []);
+  }, [initializeFarcasterSDK]);
 
   useEffect(() => {
     if (gameState.isGameOver || gameState.isPaused) {
       if (gameTimer.current) clearInterval(gameTimer.current);
       return;
     }
+    
     if (gameState.timeLeft <= 0) {
       handleTimeUp();
       return;
     }
+    
     gameTimer.current = setInterval(() => {
       setGameState(prev => ({
         ...prev,
         timeLeft: prev.timeLeft - 1
       }));
     }, 1000);
+    
     return () => {
       if (gameTimer.current) clearInterval(gameTimer.current);
     };
-  }, [gameState.timeLeft, gameState.isGameOver, gameState.isPaused]);
-
-  // ---------- WORD HINT GENERATION ---------- //
-  const generateWordHint = (word: string, difficulty: number): string => {
-    const wordLength = word.length;
-    const revealCount = Math.max(2, Math.ceil(wordLength - (difficulty * 0.5)));
-    const revealIndices = new Set([0, wordLength - 1]);
-    while (revealIndices.size < Math.min(revealCount, wordLength)) {
-      const randomIndex = Math.floor(Math.random() * wordLength);
-      revealIndices.add(randomIndex);
-    }
-    return word
-      .toUpperCase()
-      .split('')
-      .map((char, index) => revealIndices.has(index) ? char : '_')
-      .join('-');
-  };
-
-  // ---------- GAME LOGIC ---------- //
-  const startNewGame = () => {
-    setGameState({
-      level: 1,
-      score: 0,
-      tries: MAX_TRIES,
-      timeLeft: TIMER_SECONDS,
-      isGameOver: false,
-      isPaused: false
-    });
-    generateNewWord(1);
-  };
-
-  const generateNewWord = (level: number) => {
-    const randomWord = ORANGE_WORDS[Math.floor(Math.random() * ORANGE_WORDS.length)];
-    const hint = generateWordHint(randomWord, level);
-    setCurrentWord(randomWord);
-    setWordHint(hint);
-    setUserGuess('');
-    setGameState(prev => ({
-      ...prev,
-      timeLeft: TIMER_SECONDS
-    }));
-  };
+  }, [gameState.timeLeft, gameState.isGameOver, gameState.isPaused, handleTimeUp]);
 
   const handleGuessSubmission = () => {
     const guess = userGuess.trim().toLowerCase();
     const correctWord = currentWord.toLowerCase();
+    
     if (guess === correctWord) {
       const pointsEarned = POINTS_PER_LEVEL * gameState.level;
       const newScore = gameState.score + pointsEarned;
       const newLevel = gameState.level + 1;
+      
       setGameState(prev => ({
         ...prev,
         score: newScore,
         level: newLevel,
         tries: MAX_TRIES
       }));
+      
       setGameMessage(`🎉 Correct! "${currentWord.toUpperCase()}" +${pointsEarned} points!`);
+      
       setTimeout(() => {
         generateNewWord(newLevel);
         setGameMessage(`Level ${newLevel} - Keep going! 🚀`);
       }, 2000);
+      
     } else {
       handleWrongGuess();
     }
+    
     setUserGuess('');
-  };
-
-  const handleWrongGuess = () => {
-    const newTries = gameState.tries - 1;
-    if (newTries > 0) {
-      setGameState(prev => ({
-        ...prev,
-        tries: newTries,
-        timeLeft: TIMER_SECONDS
-      }));
-      setGameMessage(`❌ Wrong! "${userGuess}" is not correct. ${newTries} tries left.`);
-    } else {
-      endGame(`💀 Game Over! The word was "${currentWord.toUpperCase()}"`);
-    }
-  };
-
-  const endGame = async (message: string) => {
-    setGameState(prev => ({ ...prev, isGameOver: true }));
-    setGameMessage(`${message} | Final Score: ${gameState.score} points (Level ${gameState.level})`);
-    // Save score locally for demo
-    if (farcasterUser && gameState.score > 0) {
-      saveScoreLocally();
-    }
   };
 
   // ---------- LOCAL STORAGE FOR DEMO ---------- //
@@ -268,11 +279,14 @@ export default function InflynceOrangeGuessGame() {
         level: gameState.level,
         timestamp: Date.now()
       };
+      
       const existingScores = JSON.parse(localStorage.getItem('orangeGameScores') || '[]') as LocalScore[];
       existingScores.push(newEntry);
+      
       const topScores = existingScores
         .sort((a: LocalScore, b: LocalScore) => b.score - a.score)
         .slice(0, 10);
+      
       localStorage.setItem('orangeGameScores', JSON.stringify(topScores));
       setLocalLeaderboard(topScores);
     } catch (error) {
@@ -305,27 +319,38 @@ Can you beat my score? Play now!`;
         await sdk.actions.openUrl(
           `https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}`
         );
-      } else if (typeof navigator !== 'undefined' && 'share' in navigator) {
-        // TypeScript-safe navigator.share check and usage
-        const nav = navigator as Navigator & {
-          share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
-        };
-        
-        if (nav.share) {
-          await nav.share({
-            title: 'Inflynce Orange Guess Game',
-            text: shareText,
-            url: window.location.href
-          });
-        } else {
-          // Fallback to clipboard
-          await navigator.clipboard.writeText(shareText);
-          alert('📋 Score copied to clipboard!');
-        }
-      } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(shareText);
-        alert('📋 Score copied to clipboard!');
+        return;
       }
+      
+      // Type-safe navigator handling
+      if (typeof navigator !== 'undefined') {
+        // Check for Web Share API
+        if ('share' in navigator) {
+          try {
+            const nav = navigator as any;
+            await nav.share({
+              title: 'Inflynce Orange Guess Game',
+              text: shareText,
+              url: window.location.href
+            });
+            return;
+          } catch (shareError) {
+            console.log('Share failed, falling back to clipboard');
+          }
+        }
+        
+        // Fallback to clipboard
+        if ('clipboard' in navigator) {
+          const nav = navigator as any;
+          await nav.clipboard.writeText(shareText);
+          alert('📋 Score copied to clipboard!');
+          return;
+        }
+      }
+      
+      // Final fallback
+      alert('Unable to share. Please copy the URL manually.');
+      
     } catch (error) {
       console.error('Share error:', error);
       alert('Unable to share. Try again later.');
@@ -352,7 +377,6 @@ Can you beat my score? Play now!`;
         <meta name="twitter:title" content="Inflynce Orange Guess Game 🧡" />
         <meta name="twitter:description" content="Guess orange-themed words and compete on Base Mainnet leaderboard!" />
         <meta name="twitter:image" content="https://inflynce-orange-guess-game.vercel.app/og-image.png" />
-        {/* Farcaster Frame / Mini App Embed */}
         <meta property="fc:frame" content="vNext" />
         <meta property="fc:frame:image" content="https://inflynce-orange-guess-game.vercel.app/frame-image.png" />
         <meta property="fc:frame:button:1" content="🎮 Play Game" />
@@ -361,6 +385,7 @@ Can you beat my score? Play now!`;
         <link rel="icon" href="/favicon.ico" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </Head>
+      
       <div style={{
         background: 'linear-gradient(135deg, #FF6B35 0%, #F7931E 50%, #FFD23F 100%)',
         minHeight: '100vh',
@@ -368,6 +393,7 @@ Can you beat my score? Play now!`;
         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
         color: 'white'
       }}>
+        
         {/* HEADER */}
         <div style={{ textAlign: 'center', marginBottom: '30px' }}>
           <h1 style={{
@@ -378,6 +404,7 @@ Can you beat my score? Play now!`;
           }}>
             Inflynce Orange Guess Game 🧡
           </h1>
+          
           {farcasterUser && (
             <div style={{
               backgroundColor: 'rgba(255,255,255,0.2)',
@@ -401,6 +428,8 @@ Can you beat my score? Play now!`;
           backdropFilter: 'blur(10px)'
         }}>
           {memoizedGameStats}
+          
+          {/* WORD HINT - NO MORE FLICKERING */}
           <div style={{
             fontSize: '2.5rem',
             fontWeight: 'bold',
@@ -549,6 +578,7 @@ Can you beat my score? Play now!`;
             }}>
               🏆 Local Leaderboard (Demo)
             </h2>
+            
             <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
               {localLeaderboard.slice(0, 10).map((player, index) => (
                 <div
