@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import Head from 'next/head';
 
 // ---------- TYPE DEFINITIONS ---------- //
 interface FarcasterUser {
@@ -63,10 +64,9 @@ export default function InflynceOrangeGuessGame() {
 
   const gameTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // ---------- MEMOIZED COMPONENTS TO PREVENT FLICKERING ---------- //
+  // ---------- MEMOIZED COMPONENTS (NO FLICKERING) ---------- //
   const memoizedWordHint = useMemo(() => {
     if (!wordHint) return null;
-    
     return wordHint.split('').map((char, index) => (
       <span
         key={`${currentWord}-${index}-${char}`}
@@ -127,9 +127,7 @@ export default function InflynceOrangeGuessGame() {
     try {
       if (typeof window !== 'undefined') {
         const { sdk } = await import('@farcaster/miniapp-sdk');
-        
         const context: FarcasterContext = await sdk.context;
-        
         if (context?.user) {
           setFarcasterUser(context.user);
           setIsSDKReady(true);
@@ -143,7 +141,6 @@ export default function InflynceOrangeGuessGame() {
       console.error('Farcaster SDK initialization failed:', error);
       setGameMessage('🎮 Playing in demo mode - some features limited');
     }
-    
     startNewGame();
   };
 
@@ -159,19 +156,16 @@ export default function InflynceOrangeGuessGame() {
       if (gameTimer.current) clearInterval(gameTimer.current);
       return;
     }
-
     if (gameState.timeLeft <= 0) {
       handleTimeUp();
       return;
     }
-
     gameTimer.current = setInterval(() => {
       setGameState(prev => ({
         ...prev,
         timeLeft: prev.timeLeft - 1
       }));
     }, 1000);
-
     return () => {
       if (gameTimer.current) clearInterval(gameTimer.current);
     };
@@ -181,14 +175,11 @@ export default function InflynceOrangeGuessGame() {
   const generateWordHint = (word: string, difficulty: number): string => {
     const wordLength = word.length;
     const revealCount = Math.max(2, Math.ceil(wordLength - (difficulty * 0.5)));
-    
     const revealIndices = new Set([0, wordLength - 1]);
-    
     while (revealIndices.size < Math.min(revealCount, wordLength)) {
       const randomIndex = Math.floor(Math.random() * wordLength);
       revealIndices.add(randomIndex);
     }
-    
     return word
       .toUpperCase()
       .split('')
@@ -212,7 +203,6 @@ export default function InflynceOrangeGuessGame() {
   const generateNewWord = (level: number) => {
     const randomWord = ORANGE_WORDS[Math.floor(Math.random() * ORANGE_WORDS.length)];
     const hint = generateWordHint(randomWord, level);
-    
     setCurrentWord(randomWord);
     setWordHint(hint);
     setUserGuess('');
@@ -225,36 +215,29 @@ export default function InflynceOrangeGuessGame() {
   const handleGuessSubmission = () => {
     const guess = userGuess.trim().toLowerCase();
     const correctWord = currentWord.toLowerCase();
-    
     if (guess === correctWord) {
       const pointsEarned = POINTS_PER_LEVEL * gameState.level;
       const newScore = gameState.score + pointsEarned;
       const newLevel = gameState.level + 1;
-      
       setGameState(prev => ({
         ...prev,
         score: newScore,
         level: newLevel,
         tries: MAX_TRIES
       }));
-      
       setGameMessage(`🎉 Correct! "${currentWord.toUpperCase()}" +${pointsEarned} points!`);
-      
       setTimeout(() => {
         generateNewWord(newLevel);
         setGameMessage(`Level ${newLevel} - Keep going! 🚀`);
       }, 2000);
-      
     } else {
       handleWrongGuess();
     }
-    
     setUserGuess('');
   };
 
   const handleWrongGuess = () => {
     const newTries = gameState.tries - 1;
-    
     if (newTries > 0) {
       setGameState(prev => ({
         ...prev,
@@ -270,7 +253,6 @@ export default function InflynceOrangeGuessGame() {
   const endGame = async (message: string) => {
     setGameState(prev => ({ ...prev, isGameOver: true }));
     setGameMessage(`${message} | Final Score: ${gameState.score} points (Level ${gameState.level})`);
-    
     // Save score locally for demo
     if (farcasterUser && gameState.score > 0) {
       saveScoreLocally();
@@ -286,15 +268,11 @@ export default function InflynceOrangeGuessGame() {
         level: gameState.level,
         timestamp: Date.now()
       };
-      
       const existingScores = JSON.parse(localStorage.getItem('orangeGameScores') || '[]') as LocalScore[];
       existingScores.push(newEntry);
-      
-      // Keep only top 10 scores
       const topScores = existingScores
         .sort((a: LocalScore, b: LocalScore) => b.score - a.score)
         .slice(0, 10);
-      
       localStorage.setItem('orangeGameScores', JSON.stringify(topScores));
       setLocalLeaderboard(topScores);
     } catch (error) {
@@ -320,24 +298,21 @@ export default function InflynceOrangeGuessGame() {
     const shareText = `🧡 Just scored ${gameState.score} points on Level ${gameState.level} in Inflynce Orange Guess Game! 🍊
 
 Can you beat my score? Play now!`;
-    
     try {
       if (isSDKReady) {
         const { sdk } = await import('@farcaster/miniapp-sdk');
         await sdk.actions.openUrl(
           `https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}`
         );
+      } else if (typeof navigator !== 'undefined' && (navigator as any).share) {
+        await (navigator as any).share({
+          title: 'Inflynce Orange Guess Game',
+          text: shareText,
+          url: window.location.href
+        });
       } else {
-        if (navigator.share) {
-          await navigator.share({
-            title: 'Inflynce Orange Guess Game',
-            text: shareText,
-            url: window.location.href
-          });
-        } else {
-          await navigator.clipboard.writeText(shareText);
-          alert('📋 Score copied to clipboard!');
-        }
+        await navigator.clipboard.writeText(shareText);
+        alert('📋 Score copied to clipboard!');
       }
     } catch (error) {
       console.error('Share error:', error);
@@ -347,244 +322,267 @@ Can you beat my score? Play now!`;
 
   // ---------- RENDER COMPONENT ---------- //
   return (
-    <div style={{
-      background: 'linear-gradient(135deg, #FF6B35 0%, #F7931E 50%, #FFD23F 100%)',
-      minHeight: '100vh',
-      padding: '20px',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      color: 'white'
-    }}>
-      
-      {/* HEADER */}
-      <div style={{ textAlign: 'center', marginBottom: '30px' }}>
-        <h1 style={{
-          fontSize: '2.5rem',
-          fontWeight: 'bold',
-          textShadow: '3px 3px 6px rgba(0,0,0,0.4)',
-          margin: '0 0 10px 0'
-        }}>
-          Inflynce Orange Guess Game 🧡
-        </h1>
-        
-        {farcasterUser && (
-          <div style={{
-            backgroundColor: 'rgba(255,255,255,0.2)',
-            padding: '12px 20px',
-            borderRadius: '25px',
-            display: 'inline-block',
-            marginBottom: '10px'
+    <>
+      <Head>
+        <title>Inflynce Orange Guess Game 🧡</title>
+        <meta name="description" content="A fun word-guessing game with 33+ orange-themed words, progressive difficulty, and a Base Mainnet leaderboard. Compete with players worldwide!" />
+        <meta name="keywords" content="farcaster, mini app, word game, blockchain, base mainnet, orange" />
+        <meta name="author" content="Inflynce" />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="Inflynce Orange Guess Game" />
+        <meta property="og:title" content="Inflynce Orange Guess Game 🧡" />
+        <meta property="og:description" content="A fun word-guessing game with 33+ orange-themed words, progressive difficulty, and Base Mainnet leaderboard. Compete with players worldwide!" />
+        <meta property="og:image" content="https://inflynce-orange-guess-game.vercel.app/og-image.png" />
+        <meta property="og:url" content="https://inflynce-orange-guess-game.vercel.app/" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Inflynce Orange Guess Game 🧡" />
+        <meta name="twitter:description" content="Guess orange-themed words and compete on Base Mainnet leaderboard!" />
+        <meta name="twitter:image" content="https://inflynce-orange-guess-game.vercel.app/og-image.png" />
+        {/* Farcaster Frame / Mini App Embed */}
+        <meta property="fc:frame" content="vNext" />
+        <meta property="fc:frame:image" content="https://inflynce-orange-guess-game.vercel.app/frame-image.png" />
+        <meta property="fc:frame:button:1" content="🎮 Play Game" />
+        <meta property="fc:frame:button:1:action" content="link" />
+        <meta property="fc:frame:button:1:target" content="https://inflynce-orange-guess-game.vercel.app/" />
+        <link rel="icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+      </Head>
+      <div style={{
+        background: 'linear-gradient(135deg, #FF6B35 0%, #F7931E 50%, #FFD23F 100%)',
+        minHeight: '100vh',
+        padding: '20px',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+        color: 'white'
+      }}>
+        {/* HEADER */}
+        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+          <h1 style={{
+            fontSize: '2.5rem',
+            fontWeight: 'bold',
+            textShadow: '3px 3px 6px rgba(0,0,0,0.4)',
+            margin: '0 0 10px 0'
           }}>
-            👋 Welcome @{farcasterUser.username}!
+            Inflynce Orange Guess Game 🧡
+          </h1>
+          {farcasterUser && (
+            <div style={{
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              padding: '12px 20px',
+              borderRadius: '25px',
+              display: 'inline-block',
+              marginBottom: '10px'
+            }}>
+              👋 Welcome @{farcasterUser.username}!
+            </div>
+          )}
+        </div>
+
+        {/* GAME STATUS */}
+        <div style={{
+          backgroundColor: 'rgba(0,0,0,0.3)',
+          borderRadius: '20px',
+          padding: '25px',
+          marginBottom: '25px',
+          textAlign: 'center',
+          backdropFilter: 'blur(10px)'
+        }}>
+          {memoizedGameStats}
+          <div style={{
+            fontSize: '2.5rem',
+            fontWeight: 'bold',
+            fontFamily: 'monospace',
+            letterSpacing: '0.2em',
+            margin: '20px 0',
+            padding: '15px',
+            backgroundColor: 'rgba(255,255,255,0.1)',
+            borderRadius: '10px',
+            transition: 'all 0.2s ease'
+          }}>
+            {memoizedWordHint}
+          </div>
+        </div>
+
+        {/* GAME INPUT */}
+        {!gameState.isGameOver && (
+          <div style={{ textAlign: 'center', marginBottom: '25px' }}>
+            <input
+              type="text"
+              value={userGuess}
+              onChange={(e) => setUserGuess(e.target.value)}
+              placeholder="Type your guess here..."
+              style={{
+                padding: '15px 25px',
+                fontSize: '1.3rem',
+                borderRadius: '25px',
+                border: 'none',
+                width: '300px',
+                maxWidth: '80%',
+                textAlign: 'center',
+                marginRight: '15px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+              }}
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && userGuess.trim()) {
+                  handleGuessSubmission();
+                }
+              }}
+            />
+            <button
+              onClick={handleGuessSubmission}
+              disabled={!userGuess.trim()}
+              style={{
+                padding: '15px 30px',
+                fontSize: '1.3rem',
+                borderRadius: '25px',
+                border: 'none',
+                backgroundColor: userGuess.trim() ? '#28A745' : '#6C757D',
+                color: 'white',
+                cursor: userGuess.trim() ? 'pointer' : 'not-allowed',
+                fontWeight: 'bold',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              🚀 Submit
+            </button>
+          </div>
+        )}
+
+        {/* GAME OVER ACTIONS */}
+        {gameState.isGameOver && (
+          <div style={{ textAlign: 'center', marginBottom: '25px' }}>
+            <button
+              onClick={startNewGame}
+              style={{
+                padding: '15px 30px',
+                fontSize: '1.3rem',
+                borderRadius: '25px',
+                border: 'none',
+                backgroundColor: 'white',
+                color: '#FF6B35',
+                fontWeight: 'bold',
+                marginRight: '15px',
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              🔄 Play Again
+            </button>
+            <button
+              onClick={shareScore}
+              style={{
+                padding: '15px 30px',
+                fontSize: '1.3rem',
+                borderRadius: '25px',
+                border: 'none',
+                backgroundColor: '#007BFF',
+                color: 'white',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              📱 Share Score
+            </button>
+          </div>
+        )}
+
+        {/* GAME MESSAGE */}
+        {gameMessage && (
+          <div style={{
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            padding: '15px 25px',
+            borderRadius: '15px',
+            textAlign: 'center',
+            fontSize: '1.1rem',
+            fontWeight: '500',
+            marginBottom: '25px',
+            transition: 'all 0.3s ease'
+          }}>
+            {gameMessage}
+          </div>
+        )}
+
+        {/* CONTRACT INFO */}
+        <div style={{
+          backgroundColor: 'rgba(0,0,0,0.2)',
+          padding: '15px',
+          borderRadius: '10px',
+          marginBottom: '20px',
+          textAlign: 'center',
+          fontSize: '0.9rem'
+        }}>
+          🔗 Ready for Base Mainnet: <code>{CONTRACT_ADDRESS}</code>
+          <br />
+          <small>⚠️ Blockchain features temporarily disabled for deployment</small>
+        </div>
+
+        {/* LOCAL LEADERBOARD */}
+        {localLeaderboard.length > 0 && (
+          <div style={{
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            borderRadius: '20px',
+            padding: '25px',
+            marginTop: '30px'
+          }}>
+            <h2 style={{
+              textAlign: 'center',
+              marginBottom: '20px',
+              fontSize: '1.8rem',
+              fontWeight: 'bold'
+            }}>
+              🏆 Local Leaderboard (Demo)
+            </h2>
+            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              {localLeaderboard.slice(0, 10).map((player, index) => (
+                <div
+                  key={index}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '15px 20px',
+                    backgroundColor: index === 0 ? 'rgba(255,215,0,0.2)' : 'rgba(255,255,255,0.1)',
+                    borderRadius: '12px',
+                    marginBottom: '10px',
+                    border: index === 0 ? '2px solid gold' : 'none',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                    <span style={{
+                      fontSize: '1.5rem',
+                      fontWeight: 'bold',
+                      color: index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? '#CD7F32' : 'white'
+                    }}>
+                      #{index + 1}
+                    </span>
+                    <div>
+                      <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
+                        @{player.username}
+                      </div>
+                      <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>
+                        Level {player.level}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{
+                    fontSize: '1.3rem',
+                    fontWeight: 'bold',
+                    color: '#FFD23F'
+                  }}>
+                    {player.score} pts
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
-
-      {/* GAME STATUS */}
-      <div style={{
-        backgroundColor: 'rgba(0,0,0,0.3)',
-        borderRadius: '20px',
-        padding: '25px',
-        marginBottom: '25px',
-        textAlign: 'center',
-        backdropFilter: 'blur(10px)'
-      }}>
-        {memoizedGameStats}
-
-        {/* WORD HINT - NO MORE FLICKERING */}
-        <div style={{
-          fontSize: '2.5rem',
-          fontWeight: 'bold',
-          fontFamily: 'monospace',
-          letterSpacing: '0.2em',
-          margin: '20px 0',
-          padding: '15px',
-          backgroundColor: 'rgba(255,255,255,0.1)',
-          borderRadius: '10px',
-          transition: 'all 0.2s ease'
-        }}>
-          {memoizedWordHint}
-        </div>
-      </div>
-
-      {/* GAME INPUT */}
-      {!gameState.isGameOver && (
-        <div style={{ textAlign: 'center', marginBottom: '25px' }}>
-          <input
-            type="text"
-            value={userGuess}
-            onChange={(e) => setUserGuess(e.target.value)}
-            placeholder="Type your guess here..."
-            style={{
-              padding: '15px 25px',
-              fontSize: '1.3rem',
-              borderRadius: '25px',
-              border: 'none',
-              width: '300px',
-              maxWidth: '80%',
-              textAlign: 'center',
-              marginRight: '15px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
-            }}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && userGuess.trim()) {
-                handleGuessSubmission();
-              }
-            }}
-          />
-          <button
-            onClick={handleGuessSubmission}
-            disabled={!userGuess.trim()}
-            style={{
-              padding: '15px 30px',
-              fontSize: '1.3rem',
-              borderRadius: '25px',
-              border: 'none',
-              backgroundColor: userGuess.trim() ? '#28A745' : '#6C757D',
-              color: 'white',
-              cursor: userGuess.trim() ? 'pointer' : 'not-allowed',
-              fontWeight: 'bold',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-              transition: 'all 0.3s ease'
-            }}
-          >
-            🚀 Submit
-          </button>
-        </div>
-      )}
-
-      {/* GAME OVER ACTIONS */}
-      {gameState.isGameOver && (
-        <div style={{ textAlign: 'center', marginBottom: '25px' }}>
-          <button
-            onClick={startNewGame}
-            style={{
-              padding: '15px 30px',
-              fontSize: '1.3rem',
-              borderRadius: '25px',
-              border: 'none',
-              backgroundColor: 'white',
-              color: '#FF6B35',
-              fontWeight: 'bold',
-              marginRight: '15px',
-              cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-              transition: 'all 0.3s ease'
-            }}
-          >
-            🔄 Play Again
-          </button>
-          <button
-            onClick={shareScore}
-            style={{
-              padding: '15px 30px',
-              fontSize: '1.3rem',
-              borderRadius: '25px',
-              border: 'none',
-              backgroundColor: '#007BFF',
-              color: 'white',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-              transition: 'all 0.3s ease'
-            }}
-          >
-            📱 Share Score
-          </button>
-        </div>
-      )}
-
-      {/* GAME MESSAGE */}
-      {gameMessage && (
-        <div style={{
-          backgroundColor: 'rgba(0,0,0,0.4)',
-          padding: '15px 25px',
-          borderRadius: '15px',
-          textAlign: 'center',
-          fontSize: '1.1rem',
-          fontWeight: '500',
-          marginBottom: '25px',
-          transition: 'all 0.3s ease'
-        }}>
-          {gameMessage}
-        </div>
-      )}
-
-      {/* CONTRACT INFO */}
-      <div style={{
-        backgroundColor: 'rgba(0,0,0,0.2)',
-        padding: '15px',
-        borderRadius: '10px',
-        marginBottom: '20px',
-        textAlign: 'center',
-        fontSize: '0.9rem'
-      }}>
-        🔗 Ready for Base Mainnet: <code>{CONTRACT_ADDRESS}</code>
-        <br />
-        <small>⚠️ Blockchain features temporarily disabled for deployment</small>
-      </div>
-
-      {/* LOCAL LEADERBOARD */}
-      {localLeaderboard.length > 0 && (
-        <div style={{
-          backgroundColor: 'rgba(0,0,0,0.4)',
-          borderRadius: '20px',
-          padding: '25px',
-          marginTop: '30px'
-        }}>
-          <h2 style={{
-            textAlign: 'center',
-            marginBottom: '20px',
-            fontSize: '1.8rem',
-            fontWeight: 'bold'
-          }}>
-            🏆 Local Leaderboard (Demo)
-          </h2>
-          
-          <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-            {localLeaderboard.slice(0, 10).map((player, index) => (
-              <div
-                key={index}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '15px 20px',
-                  backgroundColor: index === 0 ? 'rgba(255,215,0,0.2)' : 'rgba(255,255,255,0.1)',
-                  borderRadius: '12px',
-                  marginBottom: '10px',
-                  border: index === 0 ? '2px solid gold' : 'none',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                  <span style={{
-                    fontSize: '1.5rem',
-                    fontWeight: 'bold',
-                    color: index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? '#CD7F32' : 'white'
-                  }}>
-                    #{index + 1}
-                  </span>
-                  <div>
-                    <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>
-                      @{player.username}
-                    </div>
-                    <div style={{ fontSize: '0.9rem', opacity: 0.8 }}>
-                      Level {player.level}
-                    </div>
-                  </div>
-                </div>
-                <div style={{
-                  fontSize: '1.3rem',
-                  fontWeight: 'bold',
-                  color: '#FFD23F'
-                }}>
-                  {player.score} pts
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+    </>
   );
 }
