@@ -309,78 +309,29 @@ export default function InflynceOrangeGuessGame() {
     loadLocalScores();
   }, [loadLocalScores]);
 
-  // ---------- SOCIAL SHARING (TYPESCRIPT-SAFE) ---------- //
+  // ---------- SHARE SCORE (UPDATED WITH NEW FARCASTER MINI APP URL) ---------- //
   const shareScore = async () => {
     const shareText = `🧡 Just scored ${gameState.score} points on Level ${gameState.level} in Inflynce Orange Guess Game! 🍊
-
-Can you beat my score? Play now!`;
-    
-    try {
-      if (isSDKReady) {
-        const { sdk } = await import('@farcaster/miniapp-sdk');
-        await sdk.actions.openUrl(
-          `https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}`
-        );
-        return;
-      }
-      
-      // Web Share API with proper typing
-      if (typeof navigator !== 'undefined' && 'share' in navigator) {
-        const nav = navigator as Navigator & { 
-          share?: (data: { title?: string; text?: string; url?: string }) => Promise<void> 
-        };
-        if (nav.share) {
-          try {
-            await nav.share({
-              title: 'Inflynce Orange Guess Game',
-              text: shareText,
-              url: window.location.href,
-            });
-            return;
-          } catch {
-            // Share failed, continue to clipboard fallback
-          }
-        }
-      }
-      
-      // Clipboard API fallback
-      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(shareText);
-        alert('📋 Score copied to clipboard!');
-        return;
-      }
-      
-      alert('Unable to share. Please copy the URL manually.');
-      
-    } catch (error) {
-      console.error('Share error:', error);
-      alert('Unable to share. Try again later.');
-    }
-  };
-
-  // ---------- EMBED SHARING ---------- //
-  const shareEmbed = async () => {
-    const embedText = `🧡 Try the Inflynce Orange Guess Game! 
 
 🎮 Word guessing with Base Mainnet leaderboard
 🏆 Compete globally with on-chain scores
 🍊 33+ orange-themed words
 
-Play now: https://inflynce-orange-guess-game.vercel.app/`;
+Can you beat my score? Play now: https://farcaster.xyz/miniapps/RwwYrw011zMj/inflynce-orange-guess-game`;
     
     try {
       if (isSDKReady) {
         const { sdk } = await import('@farcaster/miniapp-sdk');
         await sdk.actions.openUrl(
-          `https://warpcast.com/~/compose?text=${encodeURIComponent(embedText)}&embeds[]=${encodeURIComponent('https://inflynce-orange-guess-game.vercel.app/')}`
+          `https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}&embeds[]=${encodeURIComponent('https://farcaster.xyz/miniapps/RwwYrw011zMj/inflynce-orange-guess-game')}`
         );
       } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(embedText);
-        alert('🔗 Embed link copied to clipboard!');
+        await navigator.clipboard.writeText(shareText);
+        alert('📋 Score copied to clipboard!');
       }
     } catch (error) {
-      console.error('Embed share error:', error);
-      alert('Unable to share embed. Try again later.');
+      console.error('Share error:', error);
+      alert('Unable to share. Try again later.');
     }
   };
 
@@ -496,7 +447,7 @@ Play now: https://inflynce-orange-guess-game.vercel.app/`;
           </div>
         )}
 
-        {/* GAME OVER ACTIONS */}
+        {/* GAME OVER ACTIONS - UPDATED: Removed Share Score button, renamed Share Embed to Share Score */}
         {gameState.isGameOver && (
           <div style={{ textAlign: 'center', marginBottom: '25px' }}>
             <button
@@ -524,24 +475,6 @@ Play now: https://inflynce-orange-guess-game.vercel.app/`;
                 fontSize: '1.3rem',
                 borderRadius: '25px',
                 border: 'none',
-                backgroundColor: '#007BFF',
-                color: 'white',
-                fontWeight: 'bold',
-                marginRight: '15px',
-                cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                transition: 'all 0.3s ease'
-              }}
-            >
-              📱 Share Score
-            </button>
-            <button
-              onClick={shareEmbed}
-              style={{
-                padding: '15px 30px',
-                fontSize: '1.3rem',
-                borderRadius: '25px',
-                border: 'none',
                 backgroundColor: '#9C27B0',
                 color: 'white',
                 fontWeight: 'bold',
@@ -550,7 +483,7 @@ Play now: https://inflynce-orange-guess-game.vercel.app/`;
                 transition: 'all 0.3s ease'
               }}
             >
-              🔗 Share Embed
+              📱 Share Score
             </button>
           </div>
         )}
