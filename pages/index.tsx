@@ -82,6 +82,32 @@ export default function InflynceOrangeGuessGame() {
       .join('-');
   }, []);
 
+  // ---------- LOCAL STORAGE FOR DEMO ---------- //
+  const saveScoreLocally = useCallback(() => {
+    if (!farcasterUser) return;
+    
+    try {
+      const newEntry: LocalScore = {
+        username: farcasterUser.username || 'Anonymous',
+        score: gameState.score,
+        level: gameState.level,
+        timestamp: Date.now()
+      };
+      
+      const existingScores = JSON.parse(localStorage.getItem('orangeGameScores') || '[]') as LocalScore[];
+      existingScores.push(newEntry);
+      
+      const topScores = existingScores
+        .sort((a: LocalScore, b: LocalScore) => b.score - a.score)
+        .slice(0, 10);
+      
+      localStorage.setItem('orangeGameScores', JSON.stringify(topScores));
+      setLocalLeaderboard(topScores);
+    } catch (error) {
+      console.error('Failed to save score locally:', error);
+    }
+  }, [farcasterUser, gameState.score, gameState.level]);
+
   // ---------- GAME LOGIC ---------- //
   const generateNewWord = useCallback((level: number) => {
     const randomWord = ORANGE_WORDS[Math.floor(Math.random() * ORANGE_WORDS.length)];
@@ -127,7 +153,7 @@ export default function InflynceOrangeGuessGame() {
         saveScoreLocally();
       }
     }
-  }, [gameState.tries, gameState.score, gameState.level, userGuess, currentWord, farcasterUser]);
+  }, [gameState.tries, gameState.score, gameState.level, userGuess, currentWord, farcasterUser, saveScoreLocally]);
 
   const handleTimeUp = useCallback(() => {
     handleWrongGuess();
@@ -270,42 +296,18 @@ export default function InflynceOrangeGuessGame() {
     setUserGuess('');
   };
 
-  // ---------- LOCAL STORAGE FOR DEMO ---------- //
-  const saveScoreLocally = () => {
-    try {
-      const newEntry: LocalScore = {
-        username: farcasterUser?.username || 'Anonymous',
-        score: gameState.score,
-        level: gameState.level,
-        timestamp: Date.now()
-      };
-      
-      const existingScores = JSON.parse(localStorage.getItem('orangeGameScores') || '[]') as LocalScore[];
-      existingScores.push(newEntry);
-      
-      const topScores = existingScores
-        .sort((a: LocalScore, b: LocalScore) => b.score - a.score)
-        .slice(0, 10);
-      
-      localStorage.setItem('orangeGameScores', JSON.stringify(topScores));
-      setLocalLeaderboard(topScores);
-    } catch (error) {
-      console.error('Failed to save score locally:', error);
-    }
-  };
-
-  const loadLocalScores = () => {
+  const loadLocalScores = useCallback(() => {
     try {
       const scores = JSON.parse(localStorage.getItem('orangeGameScores') || '[]') as LocalScore[];
       setLocalLeaderboard(scores);
     } catch (error) {
       console.error('Failed to load local scores:', error);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadLocalScores();
-  }, []);
+  }, [loadLocalScores]);
 
   // ---------- SOCIAL SHARING (TYPESCRIPT-SAFE) ---------- //
   const shareScore = async () => {
@@ -322,33 +324,32 @@ Can you beat my score? Play now!`;
         return;
       }
       
-      // Type-safe navigator handling
-      if (typeof navigator !== 'undefined') {
-        // Check for Web Share API
-        if ('share' in navigator) {
+      // Web Share API with proper typing
+      if (typeof navigator !== 'undefined' && 'share' in navigator) {
+        const nav = navigator as Navigator & { 
+          share?: (data: { title?: string; text?: string; url?: string }) => Promise<void> 
+        };
+        if (nav.share) {
           try {
-            const nav = navigator as any;
             await nav.share({
               title: 'Inflynce Orange Guess Game',
               text: shareText,
-              url: window.location.href
+              url: window.location.href,
             });
             return;
-          } catch (shareError) {
-            console.log('Share failed, falling back to clipboard');
+          } catch {
+            // Share failed, continue to clipboard fallback
           }
-        }
-        
-        // Fallback to clipboard
-        if ('clipboard' in navigator) {
-          const nav = navigator as any;
-          await nav.clipboard.writeText(shareText);
-          alert('📋 Score copied to clipboard!');
-          return;
         }
       }
       
-      // Final fallback
+      // Clipboard API fallback
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(shareText);
+        alert('📋 Score copied to clipboard!');
+        return;
+      }
+      
       alert('Unable to share. Please copy the URL manually.');
       
     } catch (error) {
@@ -357,33 +358,37 @@ Can you beat my score? Play now!`;
     }
   };
 
+  // ---------- EMBED SHARING ---------- //
+  const shareEmbed = async () => {
+    const embedText = `🧡 Try the Inflynce Orange Guess Game! 
+
+🎮 Word guessing with Base Mainnet leaderboard
+🏆 Compete globally with on-chain scores
+🍊 33+ orange-themed words
+
+Play now: https://inflynce-orange-guess-game.vercel.app/`;
+    
+    try {
+      if (isSDKReady) {
+        const { sdk } = await import('@farcaster/miniapp-sdk');
+        await sdk.actions.openUrl(
+          `https://warpcast.com/~/compose?text=${encodeURIComponent(embedText)}&embeds[]=${encodeURIComponent('https://inflynce-orange-guess-game.vercel.app/')}`
+        );
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(embedText);
+        alert('🔗 Embed link copied to clipboard!');
+      }
+    } catch (error) {
+      console.error('Embed share error:', error);
+      alert('Unable to share embed. Try again later.');
+    }
+  };
+
   // ---------- RENDER COMPONENT ---------- //
   return (
     <>
       <Head>
         <title>Inflynce Orange Guess Game 🧡</title>
-        <meta name="description" content="A fun word-guessing game with 33+ orange-themed words, progressive difficulty, and a Base Mainnet leaderboard. Compete with players worldwide!" />
-        <meta name="keywords" content="farcaster, mini app, word game, blockchain, base mainnet, orange" />
-        <meta name="author" content="Inflynce" />
-        <meta property="og:type" content="website" />
-        <meta property="og:site_name" content="Inflynce Orange Guess Game" />
-        <meta property="og:title" content="Inflynce Orange Guess Game 🧡" />
-        <meta property="og:description" content="A fun word-guessing game with 33+ orange-themed words, progressive difficulty, and Base Mainnet leaderboard. Compete with players worldwide!" />
-        <meta property="og:image" content="https://inflynce-orange-guess-game.vercel.app/og-image.png" />
-        <meta property="og:url" content="https://inflynce-orange-guess-game.vercel.app/" />
-        <meta property="og:image:width" content="1200" />
-        <meta property="og:image:height" content="630" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="Inflynce Orange Guess Game 🧡" />
-        <meta name="twitter:description" content="Guess orange-themed words and compete on Base Mainnet leaderboard!" />
-        <meta name="twitter:image" content="https://inflynce-orange-guess-game.vercel.app/og-image.png" />
-        <meta property="fc:frame" content="vNext" />
-        <meta property="fc:frame:image" content="https://inflynce-orange-guess-game.vercel.app/frame-image.png" />
-        <meta property="fc:frame:button:1" content="🎮 Play Game" />
-        <meta property="fc:frame:button:1:action" content="link" />
-        <meta property="fc:frame:button:1:target" content="https://inflynce-orange-guess-game.vercel.app/" />
-        <link rel="icon" href="/favicon.ico" />
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </Head>
       
       <div style={{
@@ -522,12 +527,30 @@ Can you beat my score? Play now!`;
                 backgroundColor: '#007BFF',
                 color: 'white',
                 fontWeight: 'bold',
+                marginRight: '15px',
                 cursor: 'pointer',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
                 transition: 'all 0.3s ease'
               }}
             >
               📱 Share Score
+            </button>
+            <button
+              onClick={shareEmbed}
+              style={{
+                padding: '15px 30px',
+                fontSize: '1.3rem',
+                borderRadius: '25px',
+                border: 'none',
+                backgroundColor: '#9C27B0',
+                color: 'white',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                transition: 'all 0.3s ease'
+              }}
+            >
+              🔗 Share Embed
             </button>
           </div>
         )}
@@ -564,7 +587,7 @@ Can you beat my score? Play now!`;
 
         {/* LOCAL LEADERBOARD */}
         {localLeaderboard.length > 0 && (
-          <div style={{
+          <div id="leaderboard" style={{
             backgroundColor: 'rgba(0,0,0,0.4)',
             borderRadius: '20px',
             padding: '25px',
