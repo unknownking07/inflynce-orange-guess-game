@@ -1,0 +1,18 @@
+{
+  "accountAssociation": {
+    "header": "eyJmaWQiOjI0MDQ4NiwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDc5OWZmRGFlYzM4QTg4MWI3OTNBQjE3QUYwOEI3RmE5Nzk0ZDE2QzMifQ",
+    "payload": "eyJkb21haW4iOiJpbmZseW5jZS1vcmFuZ2UtZ3Vlc3MtZ2FtZS52ZXJjZWwuYXBwIn0",
+    "signature": "MHhiM2ZhNmRiYjg2Y2QxZmY1ZDRlMGMyMzU0ODhkODJlYmZjZjEwZjJkNjM0YTIzY2Q3ZTExZGMyMWM2NGYzNGRhN2Y1MmMzYzE4MjhlODk1ODNmNGQwMzI5YmY5YWYyOTJiNzBhMzkzOWEzZDEzNDIxNTI4MTYyZjc0ODg3NTI0NTFi"
+  },
+  "frame": {
+    "version": "1",
+    "name": "Inflynce Orange Guess Game",
+    "iconUrl": "https://inflynce-orange-guess-game.vercel.app/apple-touch-icon.png",
+    "homeUrl": "https://inflynce-orange-guess-game.vercel.app",
+    "imageUrl": "https://inflynce-orange-guess-game.vercel.app/og-image.png",
+    "buttonTitle": "🎮 Play Game",
+    "splashImageUrl": "https://inflynce-orange-guess-game.vercel.app/frame-image.png",
+    "splashBackgroundColor": "#FF6B35",
+    "webhookUrl": "https://inflynce-orange-guess-game.vercel.app/api/webhook"
+  }
+}

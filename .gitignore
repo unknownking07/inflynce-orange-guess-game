@@ -68,7 +68,15 @@ jspm_packages/
 
 # Gatsby files
 .cache/
-public
+
+# Public folder - ignore most files but keep essential ones for Farcaster Mini App
+public/*
+!public/.well-known/
+!public/.well-known/**
+!public/og-image.png
+!public/frame-image.png
+!public/favicon.ico
+!public/apple-touch-icon.png
 
 # Storybook build outputs
 .out
